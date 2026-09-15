@@ -14,3 +14,7 @@ _book
 *.epub
 *.mobi
 *.pdf
+
+# Java class output from local javac demos
+*.class
+encryption/bin/
