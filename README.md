@@ -255,9 +255,7 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 ## 许可证
 
-本仓库 **没有** `LICENSE` 文件，许可证目前未指定。本文档不会擅自添加 `LICENSE`。
-
-克隆下来自学、对照代码阅读一般没问题；若要再分发或改作他用，请向仓库所有者确认授权。
+本项目采用 **MIT License**。完整许可条款见仓库根目录的 [`LICENSE`](LICENSE) 文件。
 
 ## 参与贡献
 
@@ -271,4 +269,4 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 Educational Java samples for Base64, DES, 3DES, AES, Diffie–Hellman, and RSA using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.**
 
-Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; RSA-2048 OAEP(SHA-256); DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. License is unspecified (no `LICENSE` file).
+Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; RSA-2048 OAEP(SHA-256); DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
