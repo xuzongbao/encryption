@@ -2,7 +2,7 @@
 
 一套面向学习的 Java 加解密示例：用 JDK 自带的 `javax.crypto` / `java.security` / `java.util.Base64` API，演示 Base64、对称密码（DES、3DES、AES）、口令派生密钥（PBKDF2）、密钥交换（经典 DH、椭圆曲线 ECDH）、非对称密码（RSA 加密 / PSS 签名，以及 ECDSA）、SHA-256 摘要和 HMAC-SHA-256 的基本调用方式。
 
-源码在 `encryption/src/` 下，配套若干带 `main` 的演示类。仓库是经典 `src/` 包目录布局，**没有 Maven / Gradle**。
+源码在 `encryption/src/` 下，配套若干带 `main` 的演示类。仓库仍是经典 `src/` 包目录布局（没有把教学代码搬进 `src/main/java`）。根目录有一份 `pom.xml`，用来编译这些类并跑 JUnit 5；也可以继续只用 `javac` / `java`，不必装 Maven。
 
 > **请先读这一句：** 这是教学 / 演示代码，**不是**生产级密码学库，也不是 FIPS 认证组件。不要把它拷进线上系统当安全模块。
 
@@ -16,7 +16,7 @@
 
 **这不是什么**
 
-- 不是经过安全评审的加密 SDK：没有版本化 API、没有 JUnit、没有密钥存储 / 证书 / 协议设计
+- 不是经过安全评审的加密 SDK：没有版本化 API、没有密钥存储 / 证书 / 协议设计。仓库里的 JUnit 只覆盖教学 round-trip / 篡改失败，不是安全评审。
 - 不处理侧信道、随机数审计、密钥轮换、多接收方等问题
 - Base64 **只是编码**，不是加密；SHA-256 **只是哈希**，也不是加密
 
@@ -40,7 +40,7 @@
 
 - `testBase64` / `testDES` / `testDESede` / `testAES` / `testPBKDF2` / `testRSA` / `testRSASign` / `testDH` / `testECDH` / `testSHA256` / `testHMAC`
 
-它们都是带 `main` 的普通 Java 类，**不是** JUnit。
+它们都是带 `main` 的普通 Java 类，**不是** JUnit。自动化测试在 `src/test/java/`，用 `mvn test` 跑（见下面「自动化测试」）。
 
 ## 线格式（密文怎么拼）
 
@@ -82,6 +82,9 @@
 .
 ├── README.md
 ├── .gitignore
+├── pom.xml                          # Maven：编译 encryption/src + 跑 JUnit 5
+├── .github/workflows/ci.yml         # push / PR 到 master 时 mvn test
+├── src/test/java/elven/encryption/  # JUnit 5（不是 main 演示）
 └── encryption/
     └── src/
         └── elven/
@@ -91,9 +94,9 @@
             │   ├── DESede.java
             │   ├── AESUtil.java
             │   ├── PBKDF2Util.java
-│   ├── DHUtil.java
-│   ├── ECDHUtil.java
-│   ├── RSAUtil.java
+            │   ├── DHUtil.java
+            │   ├── ECDHUtil.java
+            │   ├── RSAUtil.java
             │   ├── SHA256Util.java
             │   ├── HMACUtil.java
             │   └── BytesToHex.java
@@ -111,7 +114,8 @@
                 └── testHMAC.java
 ```
 
-- 目录名像 Eclipse 工程，但仓库里 **没有** `.project` / `.classpath` / `pom.xml` / `build.gradle`。
+- 目录名像 Eclipse 工程。根目录 `pom.xml` 把 `encryption/src` 配成 Maven 主源码根（所以包名仍是 `elven.encryption` / `elven.test`），JUnit 放在标准的 `src/test/java`。没有把教学文件搬进 `src/main/java`。
+- 没有 `.project` / `.classpath` / `build.gradle`。`mvn` 产出在 `target/`，已写入 `.gitignore`。
 - 曾经捆绑的 `encryption/sun.misc.BASE64Decoder.jar`（包名其实是 `Decoder`）**已删除**，Base64 改走 JDK 标准库。
 - `DESede` 的类名没有 `Util` 后缀；`RSAUtil.getpublicKey` 的方法名仍是小写 `p`，调用时请按源码原样写。
 
@@ -119,9 +123,10 @@
 
 ### 环境
 
-- 需要 JDK 8+（`javac` + `java`）。`RSASSA-PSS` 签名演示需要 **JDK 11+**。文档中的命令在 **OpenJDK 21** 上核对过。
-- **没有** Maven / Gradle。把 `encryption/src` 当源码根目录即可。
-- 不再需要任何第三方 JAR。
+- **跑 `elven.test` 演示（`javac` / `java`）**：JDK 11+（`RSASSA-PSS` 需要 11）。文档中的命令在 **OpenJDK 21** 上核对过。
+- **跑 `mvn test` / GitHub Actions**：需要 **JDK 17+**（`pom.xml` 的 `maven.compiler.release` 是 17）。CI 使用 **JDK 21**。
+- 把 `encryption/src` 当源码根目录即可。教学代码没有搬到 `src/main/java`。
+- 编译工具类本身仍是纯 JDK，不需要 BouncyCastle。JUnit 5 只作为 Maven **test** 依赖出现，不会打进演示 classpath。
 
 Windows 下把 classpath 分隔符 `:` 换成 `;`。
 
@@ -148,12 +153,29 @@ java -cp encryption/bin elven.test.testAES
 
 成功时大致会看到：打印密钥 → 打印密文（十六进制）→ 再打印解密后的原文。`testRSA` 现在直接打印解密字符串（不再把明文打成 hex）。`testRSASign` 会打印 PSS 签名，并演示改一个字节后面验签失败；同一对密钥仍可做 OAEP 加解密。`testHMAC` 同样会翻转一个字节，展示 `verify` 从 `true` 变成 `false`。`testDH` 会先确认双方派生密钥相同，再用 AES-GCM 加解密那句示例明文。DH 第一次生成 2048 bit 参数可能要几秒。`testECDH` 同样确认双方 AES 密钥相同并 round-trip，再演示「拿错对方公钥会得到不同秘密、AES-GCM 解密失败」，以及一对很小的 ECDSA 验签。ECDH 比 DH 快得多，因为不用生成 2048 bit 素数。`testPBKDF2` 会打印盐、派生耗时、正确口令 round-trip，以及错误口令 / 错误盐时 AES-GCM 解密失败。
 
+### 用 Maven 跑 JUnit（自动化测试）
+
+`elven.test.test*` 是给人看输出的 `main` 演示；`src/test/java` 里的 `*Test` 才是断言。两者都覆盖同一套工具类，**改算法教学默认值之前请两边都看一眼**。
+
+在仓库根目录（有 `pom.xml` 的地方）：
+
+```bash
+mvn test
+```
+
+CI（`.github/workflows/ci.yml`）在 push / PR 到 `master` 时用 JDK 21 执行同样的 `mvn -B test`。
+
+常见结果：Base64 / SHA-256 / HMAC / AES-GCM / PBKDF2 / RSA / ECDH 都应很快结束；`DHUtilTest` 第一次生成 2048 bit DH 参数可能要几秒，这是预期行为，不是卡住。
+
+不需要把 `elven.test` 演示改成 JUnit，也不要用 `mvn test` 去「运行」那些 `main`。演示仍然用上一节的 `java -cp encryption/bin elven.test.testAES`。
+
 ### 用 IDE
 
-1. 用「从现有源码创建项目」或新建空 Java 项目。
-2. 把 `encryption/src` 标成 Source Root，这样 `elven.encryption` / `elven.test` 才会被识别成包名。
+1. 最省事：用 IDE **打开根目录的 Maven 项目**（识别 `pom.xml`）。主源码根已指向 `encryption/src`，测试根是 `src/test/java`。
+2. 也可以「从现有源码创建项目」：把 `encryption/src` 标成 Source Root，这样 `elven.encryption` / `elven.test` 才会被识别成包名。
 3. **不必**再添加 Base64 JAR。
-4. 打开某个 `test*.java`，运行它的 `main`。
+4. 打开某个 `encryption/src/elven/test/test*.java`，运行它的 `main`。
+5. 若用 Maven / IDE 的 JUnit 运行器：打开 `src/test/java/elven/encryption/*Test.java`，不要和上面的 `main` 演示搞混。
 
 ## 最小用法示例
 
@@ -391,12 +413,12 @@ boolean ok = ECDHUtil.verify(data.getBytes(StandardCharsets.UTF_8), signature, p
 
 欢迎来。请尽量保持「小而清晰的教学示例」：
 
-- 修文档、核对某个 JDK 上能否跑通，都很有价值。
-- 大规模框架化、引入完整密码学库，通常超出本仓库定位。
+- 修文档、核对某个 JDK 上能否跑通、补 JUnit 断言，都很有价值。
+- 大规模框架化、引入 BouncyCastle 等完整密码学库，通常超出本仓库定位。
 - 没有贡献者协议，普通 GitHub Pull Request 即可。
 
 ## English summary
 
-Educational Java samples for Base64, DES, 3DES, AES, PBKDF2, classic Diffie–Hellman, ECDH (secp256r1), RSA (OAEP encrypt + PSS sign), ECDSA, SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA/ECDSA signatures are not encryption.
+Educational Java samples for Base64, DES, 3DES, AES, PBKDF2, classic Diffie–Hellman, ECDH (secp256r1), RSA (OAEP encrypt + PSS sign), ECDSA, SHA-256, and HMAC-SHA-256 using only the JDK. Teaching sources stay in classic `encryption/src/` (`elven.encryption` / `elven.test` mains). A root `pom.xml` compiles that tree and runs JUnit 5 from `src/test/java` (`mvn test`; CI uses JDK 21). Maven requires **JDK 17+**; `javac` demos need **JDK 11+**. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA/ECDSA signatures are not encryption.
 
 Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; PBKDF2-HMAC-SHA256 with a 16-byte salt, 100_000 iterations, and a 128-bit AES key (demo speed, not OWASP production guidance); RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 kept as a classic contrast; ECDH on `secp256r1` (P-256) as the modern key-agreement path. Both DH and ECDH hash the raw `generateSecret()` bytes with SHA-256 and truncate to an AES-128 key (a teaching KDF, not HKDF; the old `generateSecret("DES")` / `generateSecret("AES")` paths are avoided). ECDHUtil also has a tiny `SHA256withECDSA` bonus on the same keys. DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
