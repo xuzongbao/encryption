@@ -2,9 +2,11 @@ package elven.encryption;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.Signature;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,12 +15,17 @@ import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 
 /**
- * RSA 非对称加密演示：2048 bit 密钥 + OAEP(SHA-256)。
+ * RSA 非对称演示：2048 bit 密钥。
  * <p>
- * 只演示「公钥加密、私钥解密」一小段数据。RSA 不适合直接加密大文件；
- * 实际系统通常用 RSA 保护对称密钥，再用 AES 加密正文。
+ * 同一对密钥可以做两件<b>不同</b>的事：
+ * <ul>
+ *   <li>加密：公钥加密、私钥解密，变换 {@link #TRANSFORMATION}（OAEP + SHA-256）</li>
+ *   <li>签名：私钥签名、公钥验签，变换 {@link #SIGNATURE_ALGORITHM}（RSASSA-PSS + SHA-256）</li>
+ * </ul>
+ * 签名不能代替加密（任何人都能用公钥验签，签名本身不保密）。
+ * RSA 也不适合直接加密大文件；实际系统通常用 RSA 保护对称密钥，再用 AES 加密正文。
  * <p>
- * 变换名里的 {@code ECB} 是 Java 的历史命名，并不表示 RSA 在做分组 ECB。
+ * 加密变换名里的 {@code ECB} 是 Java 的历史命名，并不表示 RSA 在做分组 ECB。
  * <p>
  * 这是教学示例，不是生产级加密库。
  */
@@ -36,11 +43,27 @@ public class RSAUtil {
 	 */
 	public static final String TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
 
+	/**
+	 * 数字签名变换：RSASSA-PSS + SHA-256（JDK 11+ 的 {@code SHA256withRSA/PSS}）。
+	 * 比 PKCS#1 v1.5 签名（{@code SHA256withRSA}）更不容易被填充伪造攻击。
+	 */
+	public static final String SIGNATURE_ALGORITHM = "SHA256withRSA/PSS";
+
+	/** PSS 盐长度等于 SHA-256 输出（32 字节），这是常见推荐。 */
+	public static final int PSS_SALT_LENGTH_BYTES = 32;
+
 	private static final OAEPParameterSpec OAEP_SHA256 = new OAEPParameterSpec(
 			"SHA-256",
 			"MGF1",
 			MGF1ParameterSpec.SHA256,
 			PSource.PSpecified.DEFAULT);
+
+	private static final PSSParameterSpec PSS_SHA256 = new PSSParameterSpec(
+			"SHA-256",
+			"MGF1",
+			MGF1ParameterSpec.SHA256,
+			PSS_SALT_LENGTH_BYTES,
+			1);
 
 	/**
 	 * 生成 RSA 公钥和私钥。
@@ -89,5 +112,39 @@ public class RSAUtil {
 		Cipher cipher = Cipher.getInstance(TRANSFORMATION);
 		cipher.init(Cipher.DECRYPT_MODE, privateKey, OAEP_SHA256);
 		return cipher.doFinal(data);
+	}
+
+	/**
+	 * 用私钥对数据做 RSASSA-PSS（SHA-256）签名。
+	 */
+	public static byte[] sign(byte[] data, RSAPrivateKey privateKey) throws Exception {
+		if (data == null) {
+			throw new IllegalArgumentException("data must not be null");
+		}
+		Signature signature = newPssSignature();
+		signature.initSign(privateKey);
+		signature.update(data);
+		return signature.sign();
+	}
+
+	/**
+	 * 用公钥验证 RSASSA-PSS（SHA-256）签名。
+	 *
+	 * @return {@code true} 表示签名与数据匹配
+	 */
+	public static boolean verify(byte[] data, byte[] signatureBytes, RSAPublicKey publicKey) throws Exception {
+		if (data == null || signatureBytes == null) {
+			throw new IllegalArgumentException("data and signature must not be null");
+		}
+		Signature signature = newPssSignature();
+		signature.initVerify(publicKey);
+		signature.update(data);
+		return signature.verify(signatureBytes);
+	}
+
+	private static Signature newPssSignature() throws Exception {
+		Signature signature = Signature.getInstance(SIGNATURE_ALGORITHM);
+		signature.setParameter(PSS_SHA256);
+		return signature;
 	}
 }
