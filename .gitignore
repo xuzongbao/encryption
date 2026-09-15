@@ -1,4 +1,4 @@
-# Java 教学演示项目（经典 src/ 布局，无 Maven / Gradle）
+# Java 教学演示项目（经典 src/ 布局 + 根目录 Maven 测试）
 
 # 编译与打包产物（仓库内不再保留第三方 JAR）
 *.class
@@ -9,6 +9,8 @@ encryption/bin/
 bin/
 out/
 build/
+
+# Maven 构建输出（mvn test / mvn package）
 target/
 
 # IDE
