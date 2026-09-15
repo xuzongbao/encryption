@@ -1,6 +1,6 @@
 # encryption
 
-一套面向学习的 Java 加解密示例：用 JDK 自带的 `javax.crypto` / `java.security` / `java.util.Base64` API，演示 Base64、对称密码（DES、3DES、AES）、口令派生密钥（PBKDF2）、非对称密码（DH、RSA 加密 / PSS 签名）、SHA-256 摘要和 HMAC-SHA-256 的基本调用方式。
+一套面向学习的 Java 加解密示例：用 JDK 自带的 `javax.crypto` / `java.security` / `java.util.Base64` API，演示 Base64、对称密码（DES、3DES、AES）、口令派生密钥（PBKDF2）、密钥交换（经典 DH、椭圆曲线 ECDH）、非对称密码（RSA 加密 / PSS 签名，以及 ECDSA）、SHA-256 摘要和 HMAC-SHA-256 的基本调用方式。
 
 源码在 `encryption/src/` 下，配套若干带 `main` 的演示类。仓库是经典 `src/` 包目录布局，**没有 Maven / Gradle**。
 
@@ -27,7 +27,8 @@
 | 编码 | `Base64Util` | `java.util.Base64`（标准 RFC 4648） | 明文 → Base64 字符串 → UTF-8 文本 | 已现代化 |
 | 对称 | `AESUtil` | `AES/GCM/NoPadding` | AES-128；随机 12 字节 IV 前置 | **推荐对照这条学** |
 | 口令派生 | `PBKDF2Util` | `PBKDF2WithHmacSHA256` | 16 字节盐；100_000 次迭代；输出 128 bit AES 密钥 | **口令 → 密钥，再交给 AES** |
-| 密钥交换 | `DHUtil` | DH 2048 + SHA-256 截断派生 AES-128 | 协商 → AES-GCM 加密示例明文 | 已修好现代 JDK 路径 |
+| 密钥交换（遗留对照） | `DHUtil` | 有限域 DH 2048 + SHA-256 截断派生 AES-128 | 乙方必须复用甲方 p、g；协商 → AES-GCM | **经典对照，新系统优先 ECDH** |
+| 密钥交换 | `ECDHUtil` | ECDH `secp256r1`（P-256）+ SHA-256 截断派生 AES-128；附加 `SHA256withECDSA` | 双方独立 `initKey()` → AES-GCM；错公钥得到不同秘密 | **现代默认路径（教学）** |
 | 非对称 | `RSAUtil` | 加密：`RSA/ECB/OAEPWithSHA-256AndMGF1Padding`；签名：`RSASSA-PSS`（SHA-256 / MGF1-SHA256） | 2048 bit；公钥加密 / 私钥解密；私钥签名 / 公钥验签 | 加密与签名是两套变换 |
 | 摘要 | `SHA256Util` | `SHA-256`（`MessageDigest`） | 32 字节摘要；可转十六进制 | **哈希不是加密** |
 | 消息认证 | `HMACUtil` | `HmacSHA256` | 256 bit 密钥；`MessageDigest.isEqual` 校验 | 能发现篡改，**不保密** |
@@ -37,7 +38,7 @@
 
 演示类都在 `elven.test` 包，明文样例统一是 `"hi, welcome to my git area!"`：
 
-- `testBase64` / `testDES` / `testDESede` / `testAES` / `testPBKDF2` / `testRSA` / `testRSASign` / `testDH` / `testSHA256` / `testHMAC`
+- `testBase64` / `testDES` / `testDESede` / `testAES` / `testPBKDF2` / `testRSA` / `testRSASign` / `testDH` / `testECDH` / `testSHA256` / `testHMAC`
 
 它们都是带 `main` 的普通 Java 类，**不是** JUnit。
 
@@ -65,13 +66,14 @@
 
 没有 IV。密文就是 `Cipher.doFinal` 的输出。ECB 下相同明文块会得到相同密文块——这是故意展示的反面教材。
 
-### RSA / Base64 / DH / PBKDF2
+### RSA / Base64 / DH / ECDH / PBKDF2
 
 - RSA 加密：单块密文，长度等于模数（2048 bit → 256 字节）。OAEP(SHA-256) 单块明文大约最多 190 字节。
 - RSA 签名：`sign` 返回的也是模数长的一串字节（PSS + SHA-256）；验签用原文 + 签名 + 公钥，不是「解密签名」。
 - SHA-256 / HMAC-SHA-256：输出都是 32 字节。哈希没有密钥；HMAC 有密钥，但仍不是密文。
 - Base64：标准编码器，**不按 76 字符折行**（旧 `sun.misc` / 捆绑 JAR 会折行）。
-- DH：`getSecretKey` 返回 16 字节 AES 密钥，不是「DH 原始共享秘密」本身。
+- DH / ECDH：`getSecretKey` 返回 16 字节 AES 密钥，不是「原始共享秘密」本身。ECDH 公钥是 X.509 编码（P-256 大约 91 字节），比 DH-2048 公钥小很多。
+- ECDSA：`ECDHUtil.sign` 返回 DER 编码的签名（长度不固定，常见 70 字节上下）；验签用原文 + 签名 + 公钥。
 - PBKDF2：本类只输出密钥字节，**不**改 `AESUtil` 的线格式。盐要调用方自己和密文一起存（例如另存一列，或自己拼 `盐 || IV || 密文+tag`）。丢掉盐就无法再派生出同一把密钥。
 
 ## 仓库结构
@@ -89,8 +91,9 @@
             │   ├── DESede.java
             │   ├── AESUtil.java
             │   ├── PBKDF2Util.java
-            │   ├── DHUtil.java
-            │   ├── RSAUtil.java
+│   ├── DHUtil.java
+│   ├── ECDHUtil.java
+│   ├── RSAUtil.java
             │   ├── SHA256Util.java
             │   ├── HMACUtil.java
             │   └── BytesToHex.java
@@ -103,6 +106,7 @@
                 ├── testRSA.java
                 ├── testRSASign.java
                 ├── testDH.java
+                ├── testECDH.java
                 ├── testSHA256.java
                 └── testHMAC.java
 ```
@@ -140,9 +144,9 @@ javac -encoding UTF-8 \
 java -cp encryption/bin elven.test.testAES
 ```
 
-把类名换成 `elven.test.testBase64`、`elven.test.testDES`、`elven.test.testDESede`、`elven.test.testRSA`、`elven.test.testRSASign`、`elven.test.testDH`、`elven.test.testSHA256`、`elven.test.testHMAC` 或 `elven.test.testPBKDF2` 即可。
+把类名换成 `elven.test.testBase64`、`elven.test.testDES`、`elven.test.testDESede`、`elven.test.testRSA`、`elven.test.testRSASign`、`elven.test.testDH`、`elven.test.testECDH`、`elven.test.testSHA256`、`elven.test.testHMAC` 或 `elven.test.testPBKDF2` 即可。
 
-成功时大致会看到：打印密钥 → 打印密文（十六进制）→ 再打印解密后的原文。`testRSA` 现在直接打印解密字符串（不再把明文打成 hex）。`testRSASign` 会打印 PSS 签名，并演示改一个字节后面验签失败；同一对密钥仍可做 OAEP 加解密。`testHMAC` 同样会翻转一个字节，展示 `verify` 从 `true` 变成 `false`。`testDH` 会先确认双方派生密钥相同，再用 AES-GCM 加解密那句示例明文。DH 第一次生成 2048 bit 参数可能要几秒。`testPBKDF2` 会打印盐、派生耗时、正确口令 round-trip，以及错误口令 / 错误盐时 AES-GCM 解密失败。
+成功时大致会看到：打印密钥 → 打印密文（十六进制）→ 再打印解密后的原文。`testRSA` 现在直接打印解密字符串（不再把明文打成 hex）。`testRSASign` 会打印 PSS 签名，并演示改一个字节后面验签失败；同一对密钥仍可做 OAEP 加解密。`testHMAC` 同样会翻转一个字节，展示 `verify` 从 `true` 变成 `false`。`testDH` 会先确认双方派生密钥相同，再用 AES-GCM 加解密那句示例明文。DH 第一次生成 2048 bit 参数可能要几秒。`testECDH` 同样确认双方 AES 密钥相同并 round-trip，再演示「拿错对方公钥会得到不同秘密、AES-GCM 解密失败」，以及一对很小的 ECDSA 验签。ECDH 比 DH 快得多，因为不用生成 2048 bit 素数。`testPBKDF2` 会打印盐、派生耗时、正确口令 round-trip，以及错误口令 / 错误盐时 AES-GCM 解密失败。
 
 ### 用 IDE
 
@@ -275,6 +279,52 @@ byte[] packed = AESUtil.encryptAES(data.getBytes(StandardCharsets.UTF_8), secret
 byte[] plain = AESUtil.decryptAES(packed, secret2);
 ```
 
+DH 仍保留，用来对照教材上的「大素数模幂」。新系统请优先看下面的 ECDH。
+
+### ECDH 密钥交换 → AES 加密（现代默认路径）
+
+双方都在命名曲线 `secp256r1`（NIST P-256）上各自 `initKey()`，**不必**像 DH 那样把甲方的 p、g 传给乙方：
+
+```java
+Map<String, Object> keyMap1 = ECDHUtil.initKey();          // 甲方
+byte[] publicKey1 = ECDHUtil.getPublicKey(keyMap1);
+byte[] privateKey1 = ECDHUtil.getPrivateKey(keyMap1);
+
+Map<String, Object> keyMap2 = ECDHUtil.initKey();          // 乙方，独立生成
+byte[] publicKey2 = ECDHUtil.getPublicKey(keyMap2);
+byte[] privateKey2 = ECDHUtil.getPrivateKey(keyMap2);
+
+byte[] secret1 = ECDHUtil.getSecretKey(publicKey2, privateKey1); // 16 字节 AES 密钥
+byte[] secret2 = ECDHUtil.getSecretKey(publicKey1, privateKey2);
+// secret1 与 secret2 应相同
+
+byte[] packed = AESUtil.encryptAES(data.getBytes(StandardCharsets.UTF_8), secret1);
+byte[] plain = AESUtil.decryptAES(packed, secret2);
+```
+
+可选的很小附加：同一对 P-256 密钥还能做 ECDSA（教学捷径；生产应把协商钥和签名钥分开）：
+
+```java
+byte[] signature = ECDHUtil.sign(data.getBytes(StandardCharsets.UTF_8), privateKey1);
+boolean ok = ECDHUtil.verify(data.getBytes(StandardCharsets.UTF_8), signature, publicKey1);
+```
+
+### 经典 DH 和 ECDH 差在哪
+
+| 点 | `DHUtil` | `ECDHUtil` |
+| --- | --- | --- |
+| 数学 | 有限域模幂 | 椭圆曲线点乘 |
+| 参数 | 甲方生成 2048 bit 的 p、g，乙方必须 `initKey(甲方公钥)` 复用 | 双方独立使用命名曲线 `secp256r1` |
+| 公钥体积 | 较大（X.509 编码通常几百字节） | 小很多（P-256 的 X.509 编码大约 91 字节） |
+| 速度 | 首次生成 DH 参数可能要几秒 | 通常立刻完成 |
+| Java API | `KeyPairGenerator.getInstance("DH")` + `KeyAgreement.getInstance("DH")` | `ECGenParameterSpec` + `KeyPairGenerator.getInstance("EC")` + `KeyAgreement.getInstance("ECDH")` |
+| 教学 KDF | `generateSecret()` 原始字节 → SHA-256 前 16 字节 → AES-128 | **同一套**教学 KDF，方便对照 |
+| 定位 | 经典 / 遗留对照 | 现代默认路径（本仓库教学级别） |
+
+两条路径都**没有**身份认证：只保证「算出同一把密钥」，不保证「对面真是你以为的那个人」。真实协议还要证书或签名（本仓库的 RSA-PSS / ECDSA 只演示签名 API，不是完整的 TLS）。
+
+生产环境不要照抄这里的 SHA-256 截断，应使用 [HKDF](https://datatracker.ietf.org/doc/html/rfc5869)（HMAC 提取再扩展）。本仓库故意不实现完整 HKDF，以免和这条「一眼能看懂的截断」抢焦点。更现代的密钥交换还有 X25519（Java 11+ 的 `XDH`），本示例为了和常见 NIST 教材对齐，选用 OpenJDK 里最好找的 `secp256r1`。
+
 ## 从旧 API 迁移
 
 如果你拷贝过 2016 年版本的调用方式，注意这些**故意不兼容**的变化（类名大多没改，线格式和默认参数改了）：
@@ -291,6 +341,7 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 | RSA 签名 | 无 | 新增 `sign` / `verify`，算法 `RSASSA-PSS` + SHA-256 参数；**不改变**原有 encrypt/decrypt |
 | DH 密钥 | 1024 bit | 2048 bit |
 | DH 共享密钥 | `generateSecret("DES")`，在 OpenJDK 21 上会失败 | `generateSecret()` + SHA-256 前 16 字节 → AES-128 |
+| ECDH | 无 | 新增 `ECDHUtil`：`secp256r1` + 与 DH 相同的教学 KDF；可选 `SHA256withECDSA` |
 | 字符集 | 多处 `getBytes()` / `new String(bytes)` 用平台默认 | 演示和 Base64 解码使用 UTF-8 |
 
 旧密文 **不能** 用新 `decrypt*` 解开（AES/3DES 线格式变了，RSA 填充也变了）。这是教学仓库，没有提供兼容层。
@@ -305,13 +356,14 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 4. DH 在现代 JDK 上可以跑通；不再走 `generateSecret("DES")`。
 5. 明文编解码指定 UTF-8。
 6. 补了 PBKDF2 口令派生演示，避免把 `SHA-256(口令)` 直接当 AES 密钥。
+7. 补了 ECDH（`secp256r1`）作为现代密钥交换教学路径；经典 DH 仍保留作对照。
 
 **故意保留的「遗留学习」部分**
 
 1. **DES**：仍提供，明确标成不安全（56 bit + ECB）。用来对照教材，不是推荐方案。
 2. **3DES**：仍提供 CBC+IV 的稍好写法，但算法本身过时。新系统用 AES。
-3. **DH 的 KDF**：用 SHA-256 截断，便于读懂；真实系统应使用 HKDF 等。经典有限域 DH 本身也逐渐让位给 ECDH。
-4. **没有**密钥管理、证书、大文件分段、AAD、scrypt / Argon2。仓库现已补充 SHA-256 / HMAC / RSA-PSS 签名以及 JDK 自带的 PBKDF2-HMAC-SHA256 教学示例，但仍不是完整协议。口令派生的迭代次数是为了 demo 能很快跑完，不是当年 OWASP 生产推荐值。
+3. **DH / ECDH 的 KDF**：都用 SHA-256 截断，便于读懂；真实系统应使用 HKDF 等。经典有限域 DH 保留作对照，新代码请看 ECDH。
+4. **没有**密钥管理、证书、大文件分段、AAD、scrypt / Argon2 / 完整 HKDF。仓库现已补充 SHA-256 / HMAC / RSA-PSS / ECDSA 签名、ECDH，以及 JDK 自带的 PBKDF2-HMAC-SHA256 教学示例，但仍不是完整协议。口令派生的迭代次数是为了 demo 能很快跑完，不是当年 OWASP 生产推荐值。ECDH 选用 `secp256r1` 是因为 OpenJDK 开箱即有，不是「唯一正确的曲线」。
 5. 异常仍是 `throws Exception`，方便演示，不是产品级错误处理。
 6. `test*` 类名保持小写开头的历史风格。
 
@@ -319,13 +371,17 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 - 不要声称本仓库可用于生产、通过 FIPS、或「已经安全到能保护用户数据」。
 - 不要把 SHA-256 / HMAC 当成加密：哈希和认证码都不保密。
-- 不要把 RSA 签名当成加密：验签用公钥，签名本身可被任何人看到。
+- 不要把 RSA / ECDSA 签名当成加密：验签用公钥，签名本身可被任何人看到。
 - HMAC 防篡改 ≠ AEAD。要同时保密和认证，教学对照请看 AES-GCM，而不是自己组合「加密 + HMAC」。
 - 不要复用 AES-GCM 的 IV。
 - 不要用 RSA 直接加密大文件。
 - 不要把 DES/3DES 示例里的密钥拿去保护真实数据。
 - 不要省略 PBKDF2 的盐，也不要把 `SHA-256(口令)` 当成密钥派生或口令存储。
 - 不要把演示里的 100_000 次迭代照抄进真实系统而不查当前 OWASP 建议。
+- 不要把 ECDH 当成已经认证过身份：没有签名/证书时，中间人可以分别和甲、乙各做一次协商。
+- 不要在生产里把同一对 EC 密钥既做 ECDH 又做 ECDSA；演示里合在一起只是为了少生成一对钥匙。
+- 不要用 `KeyAgreement.generateSecret("AES")`：现代 JDK 会拒绝这种隐式截断。也不要把教学用的 SHA-256 截断当成 HKDF。
+- 不要把 `secp256k1`（比特币常用）和本示例的 `secp256r1`（NIST P-256）搞混，它们不是同一条曲线。
 
 ## 许可证
 
@@ -341,6 +397,6 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 ## English summary
 
-Educational Java samples for Base64, DES, 3DES, AES, PBKDF2, Diffie–Hellman, RSA (OAEP encrypt + PSS sign), SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA signatures are not RSA encryption.
+Educational Java samples for Base64, DES, 3DES, AES, PBKDF2, classic Diffie–Hellman, ECDH (secp256r1), RSA (OAEP encrypt + PSS sign), ECDSA, SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA/ECDSA signatures are not encryption.
 
-Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; PBKDF2-HMAC-SHA256 with a 16-byte salt, 100_000 iterations, and a 128-bit AES key (demo speed, not OWASP production guidance); RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
+Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; PBKDF2-HMAC-SHA256 with a 16-byte salt, 100_000 iterations, and a 128-bit AES key (demo speed, not OWASP production guidance); RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 kept as a classic contrast; ECDH on `secp256r1` (P-256) as the modern key-agreement path. Both DH and ECDH hash the raw `generateSecret()` bytes with SHA-256 and truncate to an AES-128 key (a teaching KDF, not HKDF; the old `generateSecret("DES")` / `generateSecret("AES")` paths are avoided). ECDHUtil also has a tiny `SHA256withECDSA` bonus on the same keys. DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.

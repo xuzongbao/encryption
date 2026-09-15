@@ -29,6 +29,7 @@ import javax.crypto.spec.DHParameterSpec;
  * 作为 AES 密钥。这是<b>简化的教学 KDF</b>，不是 HKDF，不能当生产方案。
  * <p>
  * DH 模数使用 2048 bit。这是教学示例，不是生产级密钥交换库。
+ * 新系统请优先看 {@link ECDHUtil}（命名曲线、更小的公钥）；本类保留作经典对照。
  */
 public class DHUtil {
 
