@@ -27,7 +27,7 @@
 | 编码 | `Base64Util` | `java.util.Base64`（标准 RFC 4648） | 明文 → Base64 字符串 → UTF-8 文本 | 已现代化 |
 | 对称 | `AESUtil` | `AES/GCM/NoPadding` | AES-128；随机 12 字节 IV 前置 | **推荐对照这条学** |
 | 密钥交换 | `DHUtil` | DH 2048 + SHA-256 截断派生 AES-128 | 协商 → AES-GCM 加密示例明文 | 已修好现代 JDK 路径 |
-| 非对称 | `RSAUtil` | 加密：`RSA/ECB/OAEPWithSHA-256AndMGF1Padding`；签名：`SHA256withRSA/PSS` | 2048 bit；公钥加密 / 私钥解密；私钥签名 / 公钥验签 | 加密与签名是两套变换 |
+| 非对称 | `RSAUtil` | 加密：`RSA/ECB/OAEPWithSHA-256AndMGF1Padding`；签名：`RSASSA-PSS`（SHA-256 / MGF1-SHA256） | 2048 bit；公钥加密 / 私钥解密；私钥签名 / 公钥验签 | 加密与签名是两套变换 |
 | 摘要 | `SHA256Util` | `SHA-256`（`MessageDigest`） | 32 字节摘要；可转十六进制 | **哈希不是加密** |
 | 消息认证 | `HMACUtil` | `HmacSHA256` | 256 bit 密钥；`MessageDigest.isEqual` 校验 | 能发现篡改，**不保密** |
 | 对称（遗留） | `DESUtil` | `DES/ECB/PKCS5Padding` | 56 bit；无 IV | **仅教材对照，不安全** |
@@ -111,7 +111,7 @@
 
 ### 环境
 
-- 需要 JDK 8+（`javac` + `java`）。`SHA256withRSA/PSS` 签名演示需要 **JDK 11+**。文档中的命令在 **OpenJDK 21** 上核对过。
+- 需要 JDK 8+（`javac` + `java`）。`RSASSA-PSS` 签名演示需要 **JDK 11+**。文档中的命令在 **OpenJDK 21** 上核对过。
 - **没有** Maven / Gradle。把 `encryption/src` 当源码根目录即可。
 - 不再需要任何第三方 JAR。
 
@@ -200,7 +200,7 @@ Map 的键仍是 `RSAUtil.PUBLIC_KEY` / `RSAUtil.PRIVATE_KEY`。
 
 ### RSA 签名（私钥签名，公钥验签）
 
-和上面共用 `initKey()` / `getpublicKey` / `getPrivateKey`。签名变换是 `SHA256withRSA/PSS`（需要 JDK 11+）：
+和上面共用 `initKey()` / `getpublicKey` / `getPrivateKey`。签名算法是 `RSASSA-PSS`，参数里写明 SHA-256（需要 JDK 11+）：
 
 ```java
 byte[] signature = RSAUtil.sign(data.getBytes(StandardCharsets.UTF_8), privateKey);
@@ -260,7 +260,7 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 | DES | `Cipher.getInstance("DES")` | 仍是 ECB，但变换名写死为 `DES/ECB/PKCS5Padding`，并标明不安全 |
 | RSA 密钥 | 1024 bit | 2048 bit |
 | RSA 填充 | `Cipher.getInstance("RSA")`（常见 PKCS#1 v1.5） | OAEP + SHA-256（含显式 `OAEPParameterSpec`） |
-| RSA 签名 | 无 | 新增 `sign` / `verify`，变换 `SHA256withRSA/PSS`；**不改变**原有 encrypt/decrypt |
+| RSA 签名 | 无 | 新增 `sign` / `verify`，算法 `RSASSA-PSS` + SHA-256 参数；**不改变**原有 encrypt/decrypt |
 | DH 密钥 | 1024 bit | 2048 bit |
 | DH 共享密钥 | `generateSecret("DES")`，在 OpenJDK 21 上会失败 | `generateSecret()` + SHA-256 前 16 字节 → AES-128 |
 | 字符集 | 多处 `getBytes()` / `new String(bytes)` 用平台默认 | 演示和 Base64 解码使用 UTF-8 |
@@ -312,4 +312,4 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 Educational Java samples for Base64, DES, 3DES, AES, Diffie–Hellman, RSA (OAEP encrypt + PSS sign), SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA signatures are not RSA encryption.
 
-Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `SHA256withRSA/PSS` for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
+Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.

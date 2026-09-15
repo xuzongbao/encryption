@@ -44,10 +44,14 @@ public class RSAUtil {
 	public static final String TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
 
 	/**
-	 * 数字签名变换：RSASSA-PSS + SHA-256（JDK 11+ 的 {@code SHA256withRSA/PSS}）。
+	 * 数字签名算法名：{@code RSASSA-PSS}（JDK 11+ 的 JCA 标准名）。
+	 * 哈希算法不写在名字里，而在 {@link PSSParameterSpec} 中明确为 SHA-256 / MGF1-SHA256。
 	 * 比 PKCS#1 v1.5 签名（{@code SHA256withRSA}）更不容易被填充伪造攻击。
+	 * <p>
+	 * 注意：部分文档会写 {@code SHA256withRSA/PSS}，但 OpenJDK 的 SunRsaSign
+	 * 不注册这个别名；本示例使用能 {@code getInstance} 成功的 {@code RSASSA-PSS}。
 	 */
-	public static final String SIGNATURE_ALGORITHM = "SHA256withRSA/PSS";
+	public static final String SIGNATURE_ALGORITHM = "RSASSA-PSS";
 
 	/** PSS 盐长度等于 SHA-256 输出（32 字节），这是常见推荐。 */
 	public static final int PSS_SALT_LENGTH_BYTES = 32;
