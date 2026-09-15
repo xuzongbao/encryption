@@ -1,20 +1,26 @@
-# Node rules:
-## Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
-.grunt
+# Java 教学演示项目（经典 src/ 布局，无 Maven / Gradle）
 
-## Dependency directory
-## Commenting this out is preferred by some people, see
-## https://docs.npmjs.com/misc/faq#should-i-check-my-node_modules-folder-into-git
-node_modules
-
-# Book build output
-_book
-
-# eBook build output
-*.epub
-*.mobi
-*.pdf
-
-# Java class output from local javac demos
+# 编译与打包产物（仓库内不再保留第三方 JAR）
 *.class
+*.jar
+
+# 编译输出目录（含 README 中的 javac -d encryption/bin）
 encryption/bin/
+bin/
+out/
+build/
+target/
+
+# IDE
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# 操作系统杂文件
+.DS_Store
+Thumbs.db
+
+# 日志（可选）
+*.log
