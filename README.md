@@ -1,6 +1,6 @@
 # encryption
 
-一套面向学习的 Java 加解密示例：用 JDK 自带的 `javax.crypto` / `java.security` / `java.util.Base64` API，演示 Base64、对称密码（DES、3DES、AES）、非对称密码（DH、RSA 加密 / PSS 签名）、SHA-256 摘要和 HMAC-SHA-256 的基本调用方式。
+一套面向学习的 Java 加解密示例：用 JDK 自带的 `javax.crypto` / `java.security` / `java.util.Base64` API，演示 Base64、对称密码（DES、3DES、AES）、口令派生密钥（PBKDF2）、非对称密码（DH、RSA 加密 / PSS 签名）、SHA-256 摘要和 HMAC-SHA-256 的基本调用方式。
 
 源码在 `encryption/src/` 下，配套若干带 `main` 的演示类。仓库是经典 `src/` 包目录布局，**没有 Maven / Gradle**。
 
@@ -26,6 +26,7 @@
 | --- | --- | --- | --- | --- |
 | 编码 | `Base64Util` | `java.util.Base64`（标准 RFC 4648） | 明文 → Base64 字符串 → UTF-8 文本 | 已现代化 |
 | 对称 | `AESUtil` | `AES/GCM/NoPadding` | AES-128；随机 12 字节 IV 前置 | **推荐对照这条学** |
+| 口令派生 | `PBKDF2Util` | `PBKDF2WithHmacSHA256` | 16 字节盐；100_000 次迭代；输出 128 bit AES 密钥 | **口令 → 密钥，再交给 AES** |
 | 密钥交换 | `DHUtil` | DH 2048 + SHA-256 截断派生 AES-128 | 协商 → AES-GCM 加密示例明文 | 已修好现代 JDK 路径 |
 | 非对称 | `RSAUtil` | 加密：`RSA/ECB/OAEPWithSHA-256AndMGF1Padding`；签名：`RSASSA-PSS`（SHA-256 / MGF1-SHA256） | 2048 bit；公钥加密 / 私钥解密；私钥签名 / 公钥验签 | 加密与签名是两套变换 |
 | 摘要 | `SHA256Util` | `SHA-256`（`MessageDigest`） | 32 字节摘要；可转十六进制 | **哈希不是加密** |
@@ -36,7 +37,7 @@
 
 演示类都在 `elven.test` 包，明文样例统一是 `"hi, welcome to my git area!"`：
 
-- `testBase64` / `testDES` / `testDESede` / `testAES` / `testRSA` / `testRSASign` / `testDH` / `testSHA256` / `testHMAC`
+- `testBase64` / `testDES` / `testDESede` / `testAES` / `testPBKDF2` / `testRSA` / `testRSASign` / `testDH` / `testSHA256` / `testHMAC`
 
 它们都是带 `main` 的普通 Java 类，**不是** JUnit。
 
@@ -64,13 +65,14 @@
 
 没有 IV。密文就是 `Cipher.doFinal` 的输出。ECB 下相同明文块会得到相同密文块——这是故意展示的反面教材。
 
-### RSA / Base64 / DH
+### RSA / Base64 / DH / PBKDF2
 
 - RSA 加密：单块密文，长度等于模数（2048 bit → 256 字节）。OAEP(SHA-256) 单块明文大约最多 190 字节。
 - RSA 签名：`sign` 返回的也是模数长的一串字节（PSS + SHA-256）；验签用原文 + 签名 + 公钥，不是「解密签名」。
 - SHA-256 / HMAC-SHA-256：输出都是 32 字节。哈希没有密钥；HMAC 有密钥，但仍不是密文。
 - Base64：标准编码器，**不按 76 字符折行**（旧 `sun.misc` / 捆绑 JAR 会折行）。
 - DH：`getSecretKey` 返回 16 字节 AES 密钥，不是「DH 原始共享秘密」本身。
+- PBKDF2：本类只输出密钥字节，**不**改 `AESUtil` 的线格式。盐要调用方自己和密文一起存（例如另存一列，或自己拼 `盐 || IV || 密文+tag`）。丢掉盐就无法再派生出同一把密钥。
 
 ## 仓库结构
 
@@ -86,6 +88,7 @@
             │   ├── DESUtil.java
             │   ├── DESede.java
             │   ├── AESUtil.java
+            │   ├── PBKDF2Util.java
             │   ├── DHUtil.java
             │   ├── RSAUtil.java
             │   ├── SHA256Util.java
@@ -96,6 +99,7 @@
                 ├── testDES.java
                 ├── testDESede.java
                 ├── testAES.java
+                ├── testPBKDF2.java
                 ├── testRSA.java
                 ├── testRSASign.java
                 ├── testDH.java
@@ -136,9 +140,9 @@ javac -encoding UTF-8 \
 java -cp encryption/bin elven.test.testAES
 ```
 
-把类名换成 `elven.test.testBase64`、`elven.test.testDES`、`elven.test.testDESede`、`elven.test.testRSA`、`elven.test.testRSASign`、`elven.test.testDH`、`elven.test.testSHA256` 或 `elven.test.testHMAC` 即可。
+把类名换成 `elven.test.testBase64`、`elven.test.testDES`、`elven.test.testDESede`、`elven.test.testRSA`、`elven.test.testRSASign`、`elven.test.testDH`、`elven.test.testSHA256`、`elven.test.testHMAC` 或 `elven.test.testPBKDF2` 即可。
 
-成功时大致会看到：打印密钥 → 打印密文（十六进制）→ 再打印解密后的原文。`testRSA` 现在直接打印解密字符串（不再把明文打成 hex）。`testRSASign` 会打印 PSS 签名，并演示改一个字节后面验签失败；同一对密钥仍可做 OAEP 加解密。`testHMAC` 同样会翻转一个字节，展示 `verify` 从 `true` 变成 `false`。`testDH` 会先确认双方派生密钥相同，再用 AES-GCM 加解密那句示例明文。DH 第一次生成 2048 bit 参数可能要几秒。
+成功时大致会看到：打印密钥 → 打印密文（十六进制）→ 再打印解密后的原文。`testRSA` 现在直接打印解密字符串（不再把明文打成 hex）。`testRSASign` 会打印 PSS 签名，并演示改一个字节后面验签失败；同一对密钥仍可做 OAEP 加解密。`testHMAC` 同样会翻转一个字节，展示 `verify` 从 `true` 变成 `false`。`testDH` 会先确认双方派生密钥相同，再用 AES-GCM 加解密那句示例明文。DH 第一次生成 2048 bit 参数可能要几秒。`testPBKDF2` 会打印盐、派生耗时、正确口令 round-trip，以及错误口令 / 错误盐时 AES-GCM 解密失败。
 
 ### 用 IDE
 
@@ -168,6 +172,30 @@ byte[] plain = AESUtil.decryptAES(packed, key); // packed = IV || 密文+tag
 ```
 
 方法名仍是 `encryptAES` / `decryptAES`，但返回值已经带 IV，**不能**再把旧 ECB 密文丢进来解。
+
+### PBKDF2（口令 → AES 密钥）
+
+人记住的口令不能直接当 AES 密钥。先用 PBKDF2 派生 16 字节密钥，再交给 `AESUtil`。**盐必须和密文一起保存**，解密时用同一口令 + 同一份盐重新派生：
+
+```java
+byte[] salt = PBKDF2Util.generateSalt();                          // 16 字节随机盐
+byte[] key = PBKDF2Util.deriveKey(password, salt, 128);           // AES-128
+byte[] packed = AESUtil.encryptAES(data.getBytes(StandardCharsets.UTF_8), key);
+
+byte[] key2 = PBKDF2Util.deriveKey(password, salt);               // 解密方没有「密钥文件」
+byte[] plain = AESUtil.decryptAES(packed, key2);
+```
+
+演示参数（写在 `PBKDF2Util` 常量里，改一处即可）：
+
+| 参数 | 演示取值 | 说明 |
+| --- | --- | --- |
+| 算法 | `PBKDF2WithHmacSHA256` | JDK `SecretKeyFactory` 标准名 |
+| 盐 | 16 字节 `SecureRandom` | 不保密，但必须保存；每次加密 / 每个用户一份新盐 |
+| 迭代次数 | 100_000 | 教学用，云虚拟机上通常不到 1 秒；**生产请按 [OWASP 口令存储建议](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) 再提高** |
+| 输出长度 | 128 bit | 正好喂给本仓库的 `AESUtil` |
+
+**不要**把口令做一次 SHA-256 就当密钥或当「已哈希的口令」存库：没有盐、没有迭代次数，彩虹表和 GPU 暴力破解都太容易。PBKDF2 也**不是** AES 的替代品——它只负责从口令算出密钥。本示例也不是完整的「用户登录口令存储」库：若真要存口令哈希，至少还要一起存算法名、迭代次数和盐，而不是「只存一行哈希」。
 
 ### DES / 3DES（遗留）
 
@@ -276,13 +304,14 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 3. RSA 默认密钥改为 2048，填充改为 OAEP。
 4. DH 在现代 JDK 上可以跑通；不再走 `generateSecret("DES")`。
 5. 明文编解码指定 UTF-8。
+6. 补了 PBKDF2 口令派生演示，避免把 `SHA-256(口令)` 直接当 AES 密钥。
 
 **故意保留的「遗留学习」部分**
 
 1. **DES**：仍提供，明确标成不安全（56 bit + ECB）。用来对照教材，不是推荐方案。
 2. **3DES**：仍提供 CBC+IV 的稍好写法，但算法本身过时。新系统用 AES。
 3. **DH 的 KDF**：用 SHA-256 截断，便于读懂；真实系统应使用 HKDF 等。经典有限域 DH 本身也逐渐让位给 ECDH。
-4. **没有**密钥管理、证书、大文件分段、AAD、口令派生（PBKDF2/scrypt/Argon2）。仓库现已补充 SHA-256 / HMAC / RSA-PSS 签名教学示例，但仍不是完整协议。
+4. **没有**密钥管理、证书、大文件分段、AAD、scrypt / Argon2。仓库现已补充 SHA-256 / HMAC / RSA-PSS 签名以及 JDK 自带的 PBKDF2-HMAC-SHA256 教学示例，但仍不是完整协议。口令派生的迭代次数是为了 demo 能很快跑完，不是当年 OWASP 生产推荐值。
 5. 异常仍是 `throws Exception`，方便演示，不是产品级错误处理。
 6. `test*` 类名保持小写开头的历史风格。
 
@@ -295,6 +324,8 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 - 不要复用 AES-GCM 的 IV。
 - 不要用 RSA 直接加密大文件。
 - 不要把 DES/3DES 示例里的密钥拿去保护真实数据。
+- 不要省略 PBKDF2 的盐，也不要把 `SHA-256(口令)` 当成密钥派生或口令存储。
+- 不要把演示里的 100_000 次迭代照抄进真实系统而不查当前 OWASP 建议。
 
 ## 许可证
 
@@ -310,6 +341,6 @@ byte[] plain = AESUtil.decryptAES(packed, secret2);
 
 ## English summary
 
-Educational Java samples for Base64, DES, 3DES, AES, Diffie–Hellman, RSA (OAEP encrypt + PSS sign), SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA signatures are not RSA encryption.
+Educational Java samples for Base64, DES, 3DES, AES, PBKDF2, Diffie–Hellman, RSA (OAEP encrypt + PSS sign), SHA-256, and HMAC-SHA-256 using only the JDK. Classic `src/` layout, no Maven/Gradle. **Not a production crypto library and not FIPS certified.** Hashing is not encryption; HMAC authenticates but does not conceal; RSA signatures are not RSA encryption.
 
-Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
+Current teaching defaults: `java.util.Base64`; AES-128-GCM with a 12-byte IV prepended; PBKDF2-HMAC-SHA256 with a 16-byte salt, 100_000 iterations, and a 128-bit AES key (demo speed, not OWASP production guidance); RSA-2048 OAEP(SHA-256) for encrypt/decrypt and `RSASSA-PSS` with SHA-256/MGF1-SHA256 parameters for sign/verify; HMAC-SHA-256 with `MessageDigest.isEqual`; DH-2048 whose shared secret is hashed with SHA-256 and truncated to an AES-128 key (the old `generateSecret("DES")` path is gone). DES remains as an explicit insecure ECB demo; 3DES remains as legacy CBC with an 8-byte IV prepended. The bundled Base64 JAR has been removed. Licensed under the MIT License; see the `LICENSE` file.
