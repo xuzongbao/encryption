@@ -9,7 +9,7 @@ import java.security.MessageDigest;
  * 但不能从摘要还原原文，也没有密钥。任何人都能对同一段数据算出同一个值。
  * 它解决的是「内容有没有被改过」这类完整性问题，不能当保密手段。
  * 若还需要「只有持有密钥的人才能算出认证码」，请看 {@link HMACUtil}；
- * 若需要「用私钥证明是我签的」，请看 {@link RSAUtil} 的签名方法。
+ * 若需要「用私钥证明是我签的」，请看 {@link RSAUtil} 的 PSS 签名或 {@link ECDHUtil} 的 ECDSA。
  * <p>
  * 这是教学示例，不是生产级密码学库。
  */
