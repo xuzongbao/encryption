@@ -21,7 +21,8 @@ import javax.crypto.spec.SecretKeySpec;
  * </pre>
  * Java 的 {@code Cipher.doFinal} 会把 GCM tag 附加在密文末尾，调用方不必单独处理 tag。
  * <p>
- * 这是教学示例，不是生产级加密库：没有密钥管理、没有密钥派生、没有关联数据（AAD）。
+ * 这是教学示例，不是生产级加密库：没有密钥管理、没有关联数据（AAD）。
+ * 口令派生密钥见 {@link PBKDF2Util}，本类只接受已经准备好的 AES 密钥字节。
  */
 public class AESUtil {
 
